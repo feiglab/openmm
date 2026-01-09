@@ -4,10 +4,8 @@
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
- * This is part of the OpenMM molecular simulation toolkit originating from   *
- * Simbios, the NIH National Center for Physics-Based Simulation of           *
- * Biological Structures at Stanford, funded under the NIH Roadmap for        *
- * Medical Research, grant U54 GM072970. See https://simtk.org.               *
+ * This is part of the OpenMM molecular simulation toolkit.                   *
+ * See https://openmm.org/development.                                        *
  *                                                                            *
  * Portions copyright (c) 2009-2025 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
@@ -37,6 +35,7 @@
 #include "openmm/CMAPTorsionForce.h"
 #include "openmm/CMMotionRemover.h"
 #include "openmm/CompoundIntegrator.h"
+#include "openmm/ConstantPotentialForce.h"
 #include "openmm/CustomBondForce.h"
 #include "openmm/CustomCentroidBondForce.h"
 #include "openmm/CustomCompoundBondForce.h"
@@ -59,6 +58,7 @@
 #include "openmm/Integrator.h"
 #include "openmm/LangevinIntegrator.h"
 #include "openmm/LangevinMiddleIntegrator.h"
+#include "openmm/LCPOForce.h"
 #include "openmm/LocalEnergyMinimizer.h"
 #include "openmm/MonteCarloAnisotropicBarostat.h"
 #include "openmm/MonteCarloBarostat.h"
@@ -67,7 +67,9 @@
 #include "openmm/NonbondedForce.h"
 #include "openmm/Context.h"
 #include "openmm/OpenMMException.h"
+#include "openmm/OrientationRestraintForce.h"
 #include "openmm/PeriodicTorsionForce.h"
+#include "openmm/PythonForce.h"
 #include "openmm/QTBIntegrator.h"
 #include "openmm/RBTorsionForce.h"
 #include "openmm/RGForce.h"

@@ -238,6 +238,36 @@ class TestForceField(unittest.TestCase):
         self.assertTrue(found_matching_solvent_dielectric and
                         found_matching_solute_dielectric)
 
+    def test_LCPO(self):
+        """Check LCPO parameter assignment vs. the Amber implementation."""
+
+        prmtop = AmberPrmtopFile('systems/lcpo_test.prmtop')
+        pdb = PDBFile('systems/lcpo_test.pdb')
+        system1 = prmtop.createSystem(implicitSolvent=GBn2, sasaMethod='LCPO')
+        system2 = ForceField('amber14-all.xml', 'implicit/gbn2.xml').createSystem(pdb.topology, sasaMethod='LCPO')
+        lcpo1, = (force for force in system1.getForces() if isinstance(force, LCPOForce))
+        lcpo2, = (force for force in system2.getForces() if isinstance(force, LCPOForce))
+        self.assertEqual(XmlSerializer.serialize(lcpo1), XmlSerializer.serialize(lcpo2))
+
+    def test_LCPOInvalid(self):
+        """Check that LCPO parameter assignment fails instead of assigning incorrect parameters for unsupported atom types."""
+
+        # Build a water molecule.
+        topology = Topology()
+        chain = topology.addChain()
+        residue = topology.addResidue("HOH", chain)
+        o = topology.addAtom("O", elem.oxygen, residue)
+        h1 = topology.addAtom("H1", elem.hydrogen, residue)
+        h2 = topology.addAtom("H2", elem.hydrogen, residue)
+        topology.addBond(o, h1)
+        topology.addBond(o, h2)
+
+        # Water should be matched correctly but there are no LCPO parameters for
+        # O bonded to two H atoms, so an exception should be raised.
+        ff = ForceField('amber14-all.xml', 'amber14/opc3.xml', 'implicit/gbn2.xml')
+        with self.assertRaisesRegex(ValueError, 'atomic number 8.+2 bonds.+0 bonds excluding H'):
+            ff.createSystem(topology, sasaMethod='LCPO')
+
     def test_HydrogenMass(self):
         """Test that altering the mass of hydrogens works correctly."""
 
@@ -292,7 +322,7 @@ class TestForceField(unittest.TestCase):
         # Specifying a non-default value should.
         with self.assertRaises(ValueError):
             self.forcefield1.createSystem(topology, drudeMass=0.5*amu)
-        # Specifying a nonexistant argument should raise an exception.
+        # Specifying a nonexistent argument should raise an exception.
         with self.assertRaises(ValueError):
             self.forcefield1.createSystem(topology, nonbndedCutoff=1.0*nanometer)
 
@@ -804,6 +834,9 @@ class TestForceField(unittest.TestCase):
         forcefield = ForceField('amber99sb.xml', 'tip3p.xml', StringIO(simple_ffxml_contents))
         # Get list of unique unmatched residues.
         [templates, residues] = forcefield.generateTemplatesForUnmatchedResidues(pdb.topology)
+        # Make sure template atom parameter dictionaries are distinct objects.
+        parameters = [atom.parameters for template in templates for atom in template.atoms]
+        self.assertEqual(len(set(map(id, parameters))), len(parameters))
         # Add residue templates to forcefield.
         for template in templates:
             # Replace atom types.
@@ -985,6 +1018,18 @@ class TestForceField(unittest.TestCase):
         # Use an empty force field so that there are no templates.
         forcefield = ForceField()
         with self.assertRaisesRegex(ValueError, 'No template found for residue.*HOH.*The force field contains no residue templates'):
+            makeSystem(pdbLines)
+
+        # Make water with an extra site and an (invalid) bond to it.
+        pdbLines = [
+            'ATOM      0 O    HOH A   1       0       0       0                           O',
+            'ATOM      1 H1   HOH A   1       0       0       0                           H',
+            'ATOM      2 H2   HOH A   1       0       0       0                           H',
+            'ATOM      3 M    HOH A   1       0       0       0                          EP',
+            'CONECT    0    3'
+        ]
+        forcefield = ForceField('opc.xml')
+        with self.assertRaisesRegex(ValueError, 'No template found for residue.*HOH.*The set of atoms matches HOH, but the residue has 1 extra site-O bond too many'):
             makeSystem(pdbLines)
 
     def test_Wildcard(self):
@@ -1938,21 +1983,38 @@ class AmoebaTestForceField(unittest.TestCase):
         return energies
 
     def test_Amoeba18BPTI(self):
-        """Test that AMOEBA18 computes energies correctly for BPTI."""
+        """
+        Test that AMOEBA18 computes energies correctly for BPTI.
+        
+        Total Potential Energy :               -259.8636 Kcal/mole
+
+        Energy Component Breakdown :           Kcal/mole        Interactions
+
+        Bond Stretching                         290.2445              906
+        Angle Bending                           496.4300             1626
+        Stretch-Bend                              5.7695             1455
+        Out-of-Plane Bend                        51.2913              597
+        Torsional Angle                          75.6890             2391
+        Pi-Orbital Torsion                       19.3364              109
+        Torsion-Torsion                         -32.6689                6
+        Van der Waals                           383.8705           394854
+        Atomic Multipoles                     -1325.1825           394854
+        Polarization                           -224.6434           394854
+        """
         energies = self.computeAmoeba18Energies('systems/bpti.pdb')
 
         # Compare to values computed with Tinker.
 
-        self.assertAlmostEqual(290.2445, energies['AmoebaBond'], 4)
-        self.assertAlmostEqual(496.4300, energies['AmoebaAngle']+energies['AmoebaInPlaneAngle'], 4)
-        self.assertAlmostEqual(51.2913, energies['AmoebaOutOfPlaneBend'], 4)
-        self.assertAlmostEqual(5.7695, energies['AmoebaStretchBend'], 4)
+        self.assertAlmostEqual(290.2445, energies['AmoebaBondForce'], 4)
+        self.assertAlmostEqual(496.4300, energies['AmoebaAngleForce']+energies['AmoebaInPlaneAngleForce'], 4)
+        self.assertAlmostEqual(51.2913, energies['AmoebaOutOfPlaneBendForce'], 4)
+        self.assertAlmostEqual(5.7695, energies['AmoebaStretchBendForce'], 4)
         self.assertAlmostEqual(75.6890, energies['PeriodicTorsionForce'], 4)
-        self.assertAlmostEqual(19.3364, energies['AmoebaPiTorsion'], 4)
+        self.assertAlmostEqual(19.3364, energies['AmoebaPiTorsionForce'], 4)
         self.assertAlmostEqual(-32.6689, energies['AmoebaTorsionTorsionForce'], 4)
         self.assertAlmostEqual(383.8705, energies['AmoebaVdwForce'], 4)
-        self.assertAlmostEqual(-1323.5640-225.3660, energies['AmoebaMultipoleForce'], 2)
-        self.assertAlmostEqual(-258.9676, sum(list(energies.values())), 2)
+        self.assertAlmostEqual(-1325.1825-224.6434, energies['AmoebaMultipoleForce'], 2)
+        self.assertAlmostEqual(-259.8636, sum(list(energies.values())), 2)
 
     def test_Amoeba18Nucleic(self):
         """Test that AMOEBA18 computes energies correctly for DNA and RNA."""
@@ -1960,17 +2022,17 @@ class AmoebaTestForceField(unittest.TestCase):
 
         # Compare to values computed with Tinker.
 
-        self.assertAlmostEqual(749.6953, energies['AmoebaBond'], 4)
-        self.assertAlmostEqual(579.9971, energies['AmoebaAngle']+energies['AmoebaInPlaneAngle'], 4)
-        self.assertAlmostEqual(10.6630, energies['AmoebaOutOfPlaneBend'], 4)
-        self.assertAlmostEqual(5.2225, energies['AmoebaStretchBend'], 4)
+        self.assertAlmostEqual(749.6953, energies['AmoebaBondForce'], 4)
+        self.assertAlmostEqual(579.9971, energies['AmoebaAngleForce']+energies['AmoebaInPlaneAngleForce'], 4)
+        self.assertAlmostEqual(10.6630, energies['AmoebaOutOfPlaneBendForce'], 4)
+        self.assertAlmostEqual(5.2225, energies['AmoebaStretchBendForce'], 4)
         self.assertAlmostEqual(166.7233, energies['PeriodicTorsionForce'], 4)
-        self.assertAlmostEqual(57.2066, energies['AmoebaPiTorsion'], 4)
-        self.assertAlmostEqual(-4.2538, energies['AmoebaStretchTorsion'], 4)
-        self.assertAlmostEqual(-5.0402, energies['AmoebaAngleTorsion'], 4)
+        self.assertAlmostEqual(57.2066, energies['AmoebaPiTorsionForce'], 4)
+        self.assertAlmostEqual(-4.2538, energies['AmoebaStretchTorsionForce'], 4)
+        self.assertAlmostEqual(-5.0402, energies['AmoebaAngleTorsionForce'], 4)
         self.assertAlmostEqual(187.1103, energies['AmoebaVdwForce'], 4)
         self.assertAlmostEqual(1635.1289-236.1484, energies['AmoebaMultipoleForce'], 3)
-        self.assertAlmostEqual(3146.3046, sum(list(energies.values())), 3)
+        self.assertAlmostEqual(3146.3045, sum(list(energies.values())), 3)
 
 if __name__ == '__main__':
     unittest.main()

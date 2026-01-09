@@ -4,10 +4,8 @@
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
- * This is part of the OpenMM molecular simulation toolkit originating from   *
- * Simbios, the NIH National Center for Physics-Based Simulation of           *
- * Biological Structures at Stanford, funded under the NIH Roadmap for        *
- * Medical Research, grant U54 GM072970. See https://simtk.org.               *
+ * This is part of the OpenMM molecular simulation toolkit.                   *
+ * See https://openmm.org/development.                                        *
  *                                                                            *
  * Portions copyright (c) 2008-2025 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
@@ -37,6 +35,7 @@
 #include "openmm/BrownianIntegrator.h"
 #include "openmm/CMAPTorsionForce.h"
 #include "openmm/CMMotionRemover.h"
+#include "openmm/ConstantPotentialForce.h"
 #include "openmm/CustomAngleForce.h"
 #include "openmm/CustomBondForce.h"
 #include "openmm/CustomCentroidBondForce.h"
@@ -55,8 +54,11 @@
 #include "openmm/HarmonicAngleForce.h"
 #include "openmm/HarmonicBondForce.h"
 #include "openmm/KernelImpl.h"
+#include "openmm/LCPOForce.h"
 #include "openmm/MonteCarloBarostat.h"
+#include "openmm/OrientationRestraintForce.h"
 #include "openmm/PeriodicTorsionForce.h"
+#include "openmm/PythonForce.h"
 #include "openmm/QTBIntegrator.h"
 #include "openmm/RBTorsionForce.h"
 #include "openmm/RGForce.h"
@@ -167,9 +169,12 @@ public:
     /**
      * Get the positions of all particles.
      *
+     * @param context    the context in which to execute this kernel
      * @param positions  on exit, this contains the particle positions
+     * @param allowPeriodic  if true, the returned positions might be translated into a
+     *                       different periodic box to keep them closer to the origin
      */
-    virtual void getPositions(ContextImpl& context, std::vector<Vec3>& positions) = 0;
+    virtual void getPositions(ContextImpl& context, std::vector<Vec3>& positions, bool allowPeriodic=false) = 0;
     /**
      * Set the positions of all particles.
      *
@@ -655,6 +660,64 @@ public:
 };
 
 /**
+ * This kernel is invoked by ConstantPotentialForce to calculate the forces acting on the system and the energy of the system.
+ */
+class CalcConstantPotentialForceKernel : public KernelImpl {
+public:
+    static std::string Name() {
+        return "CalcConstantPotentialForce";
+    }
+    CalcConstantPotentialForceKernel(std::string name, const Platform& platform) : KernelImpl(name, platform) {
+    }
+    /**
+     * Initialize the kernel.
+     * 
+     * @param system     the System this kernel will be applied to
+     * @param force      the ConstantPotentialForce this kernel will be used for
+     */
+    virtual void initialize(const System& system, const ConstantPotentialForce& force) = 0;
+    /**
+     * Execute the kernel to calculate the forces and/or energy.
+     *
+     * @param context        the context in which to execute this kernel
+     * @param includeForces  true if forces should be calculated
+     * @param includeEnergy  true if the energy should be calculated
+     * @return the potential energy due to the force
+     */
+    virtual double execute(ContextImpl& context, bool includeForces, bool includeEnergy) = 0;
+    /**
+     * Copy changed parameters over to a context.
+     *
+     * @param context        the context to copy parameters to
+     * @param force          the ConstantPotentialForce to copy the parameters from
+     * @param firstParticle  the index of the first particle whose parameters might have changed
+     * @param lastParticle   the index of the last particle whose parameters might have changed
+     * @param firstException the index of the first exception whose parameters might have changed
+     * @param lastException  the index of the last exception whose parameters might have changed
+     * @param firstElectrode the index of the first electrode whose parameters might have changed
+     * @param lastElectrode  the index of the last electrode whose parameters might have changed
+     */
+    virtual void copyParametersToContext(ContextImpl& context, const ConstantPotentialForce& force, int firstParticle, int lastParticle, int firstException, int lastException, int firstElectrode, int lastElectrode) = 0;
+    /**
+     * Get the parameters being used for PME.
+     *
+     * @param alpha   the separation parameter
+     * @param nx      the number of grid points along the X axis
+     * @param ny      the number of grid points along the Y axis
+     * @param nz      the number of grid points along the Z axis
+     */
+    virtual void getPMEParameters(double& alpha, int& nx, int& ny, int& nz) const = 0;
+    /**
+     * Get the charges on all particles.
+     *
+     * @param context       the context to copy parameters to
+     * @param[out] charges  a vector to populate with particle charges
+     */
+    virtual void getCharges(ContextImpl& context, std::vector<double>& charges) = 0;
+};
+
+
+/**
  * This kernel is invoked by CustomNonbondedForce to calculate the forces acting on the system and the energy of the system.
  */
 class CalcCustomNonbondedForceKernel : public KernelImpl {
@@ -994,6 +1057,41 @@ public:
 };
 
 /**
+ * This kernel is invoked by LCPOForce to calculate the forces acting on the system and the energy of the system.
+ */
+class CalcLCPOForceKernel : public KernelImpl {
+public:
+    static std::string Name() {
+        return "CalcLCPOForce";
+    }
+    CalcLCPOForceKernel(std::string name, const Platform& platform) : KernelImpl(name, platform) {
+    }
+    /**
+     * Initialize the kernel.
+     *
+     * @param system     the System this kernel will be applied to
+     * @param force      the LCPOForce this kernel will be used for
+     */
+    virtual void initialize(const System& system, const LCPOForce& force) = 0;
+    /**
+     * Execute the kernel to calculate the forces and/or energy.
+     *
+     * @param context        the context in which to execute this kernel
+     * @param includeForces  true if forces should be calculated
+     * @param includeEnergy  true if the energy should be calculated
+     * @return the potential energy due to the force
+     */
+    virtual double execute(ContextImpl& context, bool includeForces, bool includeEnergy) = 0;
+    /**
+     * Copy changed parameters over to a context.
+     *
+     * @param context        the context to copy parameters to
+     * @param force          the LCPOForce to copy the parameters from
+     */
+    virtual void copyParametersToContext(ContextImpl& context, const LCPOForce& force) = 0;
+};
+
+/**
  * This kernel is invoked by CustomCVForce to calculate the forces acting on the system and the energy of the system.
  */
 class CalcCustomCVForceKernel : public KernelImpl {
@@ -1098,6 +1196,41 @@ public:
      * @return the potential energy due to the force
      */
     virtual double execute(ContextImpl& context, bool includeForces, bool includeEnergy) = 0;
+};
+
+/**
+ * This kernel is invoked by OrientationRestraintForce to calculate the forces acting on the system and the energy of the system.
+ */
+class CalcOrientationRestraintForceKernel : public KernelImpl {
+public:
+    static std::string Name() {
+        return "CalcOrientationRestraintForce";
+    }
+    CalcOrientationRestraintForceKernel(std::string name, const Platform& platform) : KernelImpl(name, platform) {
+    }
+    /**
+     * Initialize the kernel.
+     *
+     * @param system     the System this kernel will be applied to
+     * @param force      the OrientationRestraintForce this kernel will be used for
+     */
+    virtual void initialize(const System& system, const OrientationRestraintForce& force) = 0;
+    /**
+     * Execute the kernel to calculate the forces and/or energy.
+     *
+     * @param context        the context in which to execute this kernel
+     * @param includeForces  true if forces should be calculated
+     * @param includeEnergy  true if the energy should be calculated
+     * @return the potential energy due to the force
+     */
+    virtual double execute(ContextImpl& context, bool includeForces, bool includeEnergy) = 0;
+    /**
+     * Copy changed parameters over to a context.
+     *
+     * @param context    the context to copy parameters to
+     * @param force      the OrientationRestraintForce to copy the parameters from
+     */
+    virtual void copyParametersToContext(ContextImpl& context, const OrientationRestraintForce& force) = 0;
 };
 
 /**
@@ -1662,18 +1795,21 @@ public:
      * @param gridy        the y size of the PME grid
      * @param gridz        the z size of the PME grid
      * @param numParticles the number of particles in the system
+     * @param indices      indices of particles to compute charge derivatives for
      * @param alpha        the Ewald blending parameter
      * @param deterministic whether it should attempt to make the resulting forces deterministic
      */
-    virtual void initialize(int gridx, int gridy, int gridz, int numParticles, double alpha, bool deterministic) = 0;
+    virtual void initialize(int gridx, int gridy, int gridz, int numParticles, const std::vector<int>& indices, double alpha, bool deterministic) = 0;
     /**
      * Begin computing the force and energy.
      *
-     * @param io                  an object that coordinates data transfer
-     * @param periodicBoxVectors  the vectors defining the periodic box (measured in nm)
-     * @param includeEnergy       true if potential energy should be computed
+     * @param io                        an object that coordinates data transfer
+     * @param periodicBoxVectors        the vectors defining the periodic box (measured in nm)
+     * @param includeEnergy             true if potential energy should be computed
+     * @param includeForces             true if forces should be computed
+     * @param includeChargeDerivatives  true if charge derivatives should be computed
      */
-    virtual void beginComputation(IO& io, const Vec3* periodicBoxVectors, bool includeEnergy) = 0;
+    virtual void beginComputation(IO& io, const Vec3* periodicBoxVectors, bool includeEnergy, bool includeForces, bool includeChargeDerivatives) = 0;
     /**
      * Finish computing the force and energy.
      * 
@@ -1711,8 +1847,14 @@ public:
      *                 should be ignored.
      */
     virtual void setForce(float* force) = 0;
+    /**
+     * Record the charge derivatives calculated by the kernel.
+     *
+     * @param chargeDerivatives  an array containing one element for each atom
+     *                           to compute charge derivatives for.
+     */
+    virtual void setChargeDerivatives(float* chargeDerivatives) = 0;
 };
-
 
 /**
  * This kernel performs the dispersion reciprocal space calculation for LJPME.  In most cases, this
@@ -1828,6 +1970,34 @@ public:
      * @param force      the CustomCPPForceImpl this kernel will be used for
      */
     virtual void initialize(const System& system, CustomCPPForceImpl& force) = 0;
+    /**
+     * Execute the kernel to calculate the forces and/or energy.
+     *
+     * @param context        the context in which to execute this kernel
+     * @param includeForces  true if forces should be calculated
+     * @param includeEnergy  true if the energy should be calculated
+     * @return the potential energy due to the force
+     */
+    virtual double execute(ContextImpl& context, bool includeForces, bool includeEnergy) = 0;
+};
+
+/**
+ * This kernel is invoked by PythonForce to calculate the forces acting on the system and the energy of the system.
+ */
+class CalcPythonForceKernel : public KernelImpl {
+public:
+    static std::string Name() {
+        return "CalcPythonForce";
+    }
+    CalcPythonForceKernel(std::string name, const Platform& platform) : KernelImpl(name, platform) {
+    }
+    /**
+     * Initialize the kernel.
+     *
+     * @param system     the System this kernel will be applied to
+     * @param force      the PythonForce this kernel will be used for
+     */
+    virtual void initialize(const System& system, const PythonForce& force) = 0;
     /**
      * Execute the kernel to calculate the forces and/or energy.
      *

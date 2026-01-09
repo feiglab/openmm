@@ -2,10 +2,8 @@
 """
 Module openmm.unit.prefix
 
-This is part of the OpenMM molecular simulation toolkit originating from
-Simbios, the NIH National Center for Physics-Based Simulation of
-Biological Structures at Stanford, funded under the NIH Roadmap for
-Medical Research, grant U54 GM072970. See https://simtk.org.
+This is part of the OpenMM molecular simulation toolkit.
+See https://openmm.org/development.
 
 Portions copyright (c) 2012 Stanford University and the Authors.
 Authors: Christopher M. Bruns
@@ -146,7 +144,7 @@ def define_prefixed_units(base_unit, module = sys.modules[__name__]):
         new_unit = Unit({new_base_unit: 1.0})
         # Create base_unit attribute, needed for creating UnitSystems
         module.__dict__[name + '_base_unit'] = new_base_unit # e.g. "kilometer_base_unit"
-        # Create attribue in this module
+        # Create attribute in this module
         module.__dict__[name] = new_unit # e.g. "kilometer"
         # And plural version
         module.__dict__[name + 's'] = new_unit # e.g. "kilometers"

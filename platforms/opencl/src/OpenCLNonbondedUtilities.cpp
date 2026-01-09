@@ -1,10 +1,8 @@
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
- * This is part of the OpenMM molecular simulation toolkit originating from   *
- * Simbios, the NIH National Center for Physics-Based Simulation of           *
- * Biological Structures at Stanford, funded under the NIH Roadmap for        *
- * Medical Research, grant U54 GM072970. See https://simtk.org.               *
+ * This is part of the OpenMM molecular simulation toolkit.                   *
+ * See https://openmm.org/development.                                        *
  *                                                                            *
  * Portions copyright (c) 2009-2025 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
@@ -377,7 +375,7 @@ void OpenCLNonbondedUtilities::computeInteractions(int forceGroups, bool include
     if ((forceGroups&groupFlags) == 0)
         return;
     KernelSet& kernels = groupKernels[forceGroups];
-    if (kernels.hasForces) {
+    if (kernels.hasForces && (includeForces || includeEnergy)) {
         if (isAMD)
             context.getQueue().flush();
         cl::Kernel& kernel = (includeForces ? (includeEnergy ? kernels.forceEnergyKernel : kernels.forceKernel) : kernels.energyKernel);

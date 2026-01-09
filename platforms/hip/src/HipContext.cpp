@@ -1,10 +1,8 @@
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
- * This is part of the OpenMM molecular simulation toolkit originating from   *
- * Simbios, the NIH National Center for Physics-Based Simulation of           *
- * Biological Structures at Stanford, funded under the NIH Roadmap for        *
- * Medical Research, grant U54 GM072970. See https://simtk.org.               *
+ * This is part of the OpenMM molecular simulation toolkit.                   *
+ * See https://openmm.org/development.                                        *
  *                                                                            *
  * Portions copyright (c) 2009-2025 Stanford University and the Authors.      *
  * Portions copyright (c) 2020-2023 Advanced Micro Devices, Inc.              *
@@ -184,6 +182,17 @@ HipContext::HipContext(const System& system, int deviceIndex, bool useBlockingSy
         this->supportsHardwareFloatGlobalAtomicAdd = true;
     }
 
+    hostMallocFlags = hipHostMallocDefault;
+#if !defined(WIN32)
+    // hipHostMallocNumaUser may not be allowed in some conditions, for example, if docker container 
+    // is created without --security-opt seccomp=unconfined or --cap-add=SYS_NICE
+    int* tmpHostBuffer;
+    if(hipHostMalloc(&tmpHostBuffer, sizeof(*tmpHostBuffer), hipHostMallocNumaUser) == hipSuccess) {
+        CHECK_RESULT(hipHostFree(tmpHostBuffer));
+        hostMallocFlags = hipHostMallocNumaUser;
+    }
+#endif
+
     contextIsValid = true;
     ContextSelector selector(*this);
     if (contextIndex > 0 && originalContext == NULL) {
@@ -284,6 +293,7 @@ HipContext::HipContext(const System& system, int deviceIndex, bool useBlockingSy
     compilationDefines["ATAN"] = useDoublePrecision ? "atan" : "atanf";
     compilationDefines["ERF"] = useDoublePrecision ? "erf" : "erff";
     compilationDefines["ERFC"] = useDoublePrecision ? "erfc" : "erfcf";
+    compilationDefines["FMA"] = useDoublePrecision ? "fma" : "fmaf";
 
     // Set defines for applying periodic boundary conditions.
 
@@ -912,9 +922,5 @@ unsigned int HipContext::getEventFlags() {
 }
 
 unsigned int HipContext::getHostMallocFlags() {
-#ifdef WIN32
-    return hipHostMallocDefault;
-#else
-    return hipHostMallocNumaUser;
-#endif
+    return hostMallocFlags;
 }

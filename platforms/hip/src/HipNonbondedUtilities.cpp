@@ -1,10 +1,8 @@
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
- * This is part of the OpenMM molecular simulation toolkit originating from   *
- * Simbios, the NIH National Center for Physics-Based Simulation of           *
- * Biological Structures at Stanford, funded under the NIH Roadmap for        *
- * Medical Research, grant U54 GM072970. See https://simtk.org.               *
+ * This is part of the OpenMM molecular simulation toolkit.                   *
+ * See https://openmm.org/development.                                        *
  *                                                                            *
  * Portions copyright (c) 2009-2025 Stanford University and the Authors.      *
  * Portions copyright (c) 2020-2023 Advanced Micro Devices, Inc.              *
@@ -448,7 +446,7 @@ void HipNonbondedUtilities::computeInteractions(int forceGroups, bool includeFor
     if ((forceGroups&groupFlags) == 0)
         return;
     KernelSet& kernels = groupKernels[forceGroups];
-    if (kernels.hasForces) {
+    if (kernels.hasForces && (includeForces || includeEnergy)) {
         hipFunction_t& kernel = (includeForces ? (includeEnergy ? kernels.forceEnergyKernel : kernels.forceKernel) : kernels.energyKernel);
         if (kernel == NULL)
             kernel = createInteractionKernel(kernels.source, parameters, arguments, true, true, forceGroups, includeForces, includeEnergy);
@@ -682,10 +680,10 @@ hipFunction_t HipNonbondedUtilities::createInteractionKernel(const string& sourc
     replacements["SAVE_DERIVATIVES"] = saveDerivs.str();
 
     stringstream shuffleWarpData;
-    shuffleWarpData << "shflPosq = warpRotateLeft<TILE_SIZE>(shflPosq);\n";
-    shuffleWarpData << "shflForce = warpRotateLeft<TILE_SIZE>(shflForce);\n";
+    shuffleWarpData << "shflPosq = warpRotateLeft(shflPosq);\n";
+    shuffleWarpData << "shflForce = warpRotateLeft(shflForce);\n";
     for (const ComputeParameterInfo& param : params) {
-        shuffleWarpData<<"shfl"<<param.getName()<<"=warpRotateLeft<TILE_SIZE>(shfl"<<param.getName()<<");\n";
+        shuffleWarpData<<"shfl"<<param.getName()<<"=warpRotateLeft(shfl"<<param.getName()<<");\n";
     }
     replacements["SHUFFLE_WARP_DATA"] = shuffleWarpData.str();
 

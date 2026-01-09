@@ -24,12 +24,14 @@ These classes implement forces that are widely used in biomolecular simulation.
 .. toctree::
     :maxdepth: 2
 
+    generated/ConstantPotentialForce
     generated/CMAPTorsionForce
     generated/DrudeForce
     generated/GBSAOBCForce
     generated/GayBerneForce
     generated/HarmonicAngleForce
     generated/HarmonicBondForce
+    generated/LCPOForce
     generated/NonbondedForce
     generated/PeriodicTorsionForce
     generated/RBTorsionForce
@@ -55,10 +57,8 @@ Pseudo-forces
 =============
 
 These inherit from ``Force``, but do not describe physical forces. They are used
-to implement thermostats or barostats, or otherwise modify the simulation from
-step to step. They are conceptually closer to modifications to the integrator,
-but providing them as a ``Force`` simplifies implementation and allows them to
-be combined in arbitrary ways.
+for a variety of purposes: to implement thermostats or barostats, to apply biasing
+potentials, or to otherwise modify the simulation from step to step.
 
 .. toctree::
     :maxdepth: 2
@@ -70,6 +70,7 @@ be combined in arbitrary ways.
     generated/MonteCarloBarostat
     generated/MonteCarloFlexibleBarostat
     generated/MonteCarloMembraneBarostat
+    generated/OrientationRestraintForce
     generated/RGForce
     generated/RMSDForce
     generated/RPMDMonteCarloBarostat

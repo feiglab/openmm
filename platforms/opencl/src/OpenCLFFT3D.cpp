@@ -1,10 +1,8 @@
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
- * This is part of the OpenMM molecular simulation toolkit originating from   *
- * Simbios, the NIH National Center for Physics-Based Simulation of           *
- * Biological Structures at Stanford, funded under the NIH Roadmap for        *
- * Medical Research, grant U54 GM072970. See https://simtk.org.               *
+ * This is part of the OpenMM molecular simulation toolkit.                   *
+ * See https://openmm.org/development.                                        *
  *                                                                            *
  * Portions copyright (c) 2009-2025 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
@@ -61,6 +59,8 @@ OpenCLFFT3D::OpenCLFFT3D(OpenCLContext& context, int xsize, int ysize, int zsize
     if (platformVendor.size() >= 5 && platformVendor.substr(0, 5) == "Intel") {
         // Intel's OpenCL uses low accuracy trig functions, so tell VkFFT to use lookup tables instead.
         config.useLUT = 1;
+        // Version 2025.3 of Intel's OpenCL generates incorrect results when Y and Z sizes are 33 or 39; this is a workaround.
+        config.fixMinRaderPrimeMult = 11;
     }
     VkFFTResult result = initializeVkFFT(&app, config);
     if (result != VKFFT_SUCCESS)

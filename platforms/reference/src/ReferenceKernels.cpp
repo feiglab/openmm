@@ -1,10 +1,8 @@
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
- * This is part of the OpenMM molecular simulation toolkit originating from   *
- * Simbios, the NIH National Center for Physics-Based Simulation of           *
- * Biological Structures at Stanford, funded under the NIH Roadmap for        *
- * Medical Research, grant U54 GM072970. See https://simtk.org.               *
+ * This is part of the OpenMM molecular simulation toolkit.                   *
+ * See https://openmm.org/development.                                        *
  *                                                                            *
  * Portions copyright (c) 2008-2025 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
@@ -36,6 +34,8 @@
 #include "ReferenceBondForce.h"
 #include "ReferenceBrownianDynamics.h"
 #include "ReferenceCMAPTorsionIxn.h"
+#include "ReferenceConstantPotential.h"
+#include "ReferenceConstantPotential14.h"
 #include "ReferenceConstraints.h"
 #include "ReferenceCustomAngleIxn.h"
 #include "ReferenceCustomBondIxn.h"
@@ -53,11 +53,13 @@
 #include "ReferenceGayBerneForce.h"
 #include "ReferenceHarmonicBondIxn.h"
 #include "ReferenceLangevinMiddleDynamics.h"
+#include "ReferenceLCPOIxn.h"
 #include "ReferenceLJCoulomb14.h"
 #include "ReferenceLJCoulombIxn.h"
 #include "ReferenceMonteCarloBarostat.h"
 #include "ReferenceNoseHooverChain.h"
 #include "ReferenceNoseHooverDynamics.h"
+#include "ReferenceOrientationRestraintForce.h"
 #include "ReferencePointFunctions.h"
 #include "ReferenceProperDihedralBond.h"
 #include "ReferenceQTBDynamics.h"
@@ -79,6 +81,7 @@
 #include "openmm/internal/CustomHbondForceImpl.h"
 #include "openmm/internal/CMAPTorsionForceImpl.h"
 #include "openmm/internal/NonbondedForceImpl.h"
+#include "openmm/internal/ConstantPotentialForceImpl.h"
 #include "openmm/Integrator.h"
 #include "openmm/OpenMMException.h"
 #include "SimTKOpenMMUtilities.h"
@@ -171,11 +174,8 @@ void ReferenceCalcForcesAndEnergyKernel::beginComputation(ContextImpl& context, 
     vector<Vec3>& forceData = extractForces(context);
     if (includeForces) {
         int numParticles = context.getSystem().getNumParticles();
-        for (int i = 0; i < numParticles; ++i) {
-            forceData[i][0] = 0.0;
-            forceData[i][1] = 0.0;
-            forceData[i][2] = 0.0;
-        }
+        for (int i = 0; i < numParticles; ++i)
+            forceData[i] = Vec3();
     }
     else
         savedForces = forceData;
@@ -214,40 +214,20 @@ void ReferenceUpdateStateDataKernel::setStepCount(const ContextImpl& context, lo
     data.stepCount = count;
 }
 
-void ReferenceUpdateStateDataKernel::getPositions(ContextImpl& context, std::vector<Vec3>& positions) {
-    int numParticles = context.getSystem().getNumParticles();
-    vector<Vec3>& posData = extractPositions(context);
-    positions.resize(numParticles);
-    for (int i = 0; i < numParticles; ++i)
-        positions[i] = Vec3(posData[i][0], posData[i][1], posData[i][2]);
+void ReferenceUpdateStateDataKernel::getPositions(ContextImpl& context, std::vector<Vec3>& positions, bool allowPeriodic) {
+    positions = extractPositions(context);
 }
 
 void ReferenceUpdateStateDataKernel::setPositions(ContextImpl& context, const std::vector<Vec3>& positions) {
-    int numParticles = context.getSystem().getNumParticles();
-    vector<Vec3>& posData = extractPositions(context);
-    for (int i = 0; i < numParticles; ++i) {
-        posData[i][0] = positions[i][0];
-        posData[i][1] = positions[i][1];
-        posData[i][2] = positions[i][2];
-    }
+    extractPositions(context) = positions;
 }
 
 void ReferenceUpdateStateDataKernel::getVelocities(ContextImpl& context, std::vector<Vec3>& velocities) {
-    int numParticles = context.getSystem().getNumParticles();
-    vector<Vec3>& velData = extractVelocities(context);
-    velocities.resize(numParticles);
-    for (int i = 0; i < numParticles; ++i)
-        velocities[i] = Vec3(velData[i][0], velData[i][1], velData[i][2]);
+    velocities = extractVelocities(context);
 }
 
 void ReferenceUpdateStateDataKernel::setVelocities(ContextImpl& context, const std::vector<Vec3>& velocities) {
-    int numParticles = context.getSystem().getNumParticles();
-    vector<Vec3>& velData = extractVelocities(context);
-    for (int i = 0; i < numParticles; ++i) {
-        velData[i][0] = velocities[i][0];
-        velData[i][1] = velocities[i][1];
-        velData[i][2] = velocities[i][2];
-    }
+    extractVelocities(context) = velocities;
 }
 
 void ReferenceUpdateStateDataKernel::computeShiftedVelocities(ContextImpl& context, double timeShift, std::vector<Vec3>& velocities) {
@@ -278,11 +258,7 @@ void ReferenceUpdateStateDataKernel::computeShiftedVelocities(ContextImpl& conte
 }
 
 void ReferenceUpdateStateDataKernel::getForces(ContextImpl& context, std::vector<Vec3>& forces) {
-    int numParticles = context.getSystem().getNumParticles();
-    vector<Vec3>& forceData = extractForces(context);
-    forces.resize(numParticles);
-    for (int i = 0; i < numParticles; ++i)
-        forces[i] = Vec3(forceData[i][0], forceData[i][1], forceData[i][2]);
+    forces = extractForces(context);
 }
 
 void ReferenceUpdateStateDataKernel::getEnergyParameterDerivatives(ContextImpl& context, map<string, double>& derivs) {
@@ -1181,6 +1157,239 @@ void ReferenceCalcNonbondedForceKernel::computeParameters(ContextImpl& context) 
         bonded14ParamArray[i][1] = 4.0*epsilons[i];
         bonded14ParamArray[i][2] = charges[i];
     }
+}
+
+ReferenceCalcConstantPotentialForceKernel::~ReferenceCalcConstantPotentialForceKernel() {
+    if (neighborList != NULL) {
+        delete neighborList;
+    }
+    if (solver != NULL) {
+        delete solver;
+    }
+}
+
+void ReferenceCalcConstantPotentialForceKernel::initialize(const System& system, const ConstantPotentialForce& force) {
+    // Get particle parameters.
+    numParticles = force.getNumParticles();
+    charges.resize(numParticles);
+    for (int i = 0; i < numParticles; i++) {
+        force.getParticleParameters(i, charges[i]);
+    }
+
+    // Get "1-4" exceptions (those that don't zero the charge product).
+    exclusions.resize(numParticles);
+    vector<int> nb14s;
+    for (int i = 0; i < force.getNumExceptions(); i++) {
+        int particle1, particle2;
+        double chargeProd;
+        force.getExceptionParameters(i, particle1, particle2, chargeProd);
+        exclusions[particle1].insert(particle2);
+        exclusions[particle2].insert(particle1);
+        if (chargeProd != 0.0) {
+            nb14Index[i] = nb14s.size();
+            nb14s.push_back(i);
+        }
+    }
+
+    // Get exception parameters.
+    num14 = nb14s.size();
+    bonded14ParamArray.resize(num14, vector<double>(1));
+    bonded14IndexArray.resize(num14, vector<int>(2));
+    for (int i = 0; i < num14; ++i) {
+        int particle1, particle2;
+        force.getExceptionParameters(nb14s[i], particle1, particle2, bonded14ParamArray[i][0]);
+        bonded14IndexArray[i][0] = particle1;
+        bonded14IndexArray[i][1] = particle2;
+    }
+
+    // Get electrode parameters.  sysToElec will be a map from system particle
+    // indices to electrode particle indices (or -1 if the particle is not an
+    // electrode particle), while elecToSys will be a map from electrode
+    // particle indices to system particle indices.
+    sysToElec.resize(numParticles, -1);
+    for (int ie = 0; ie < force.getNumElectrodes(); ie++) {
+        std::set<int> electrodeParticles;
+        double potential;
+        double gaussianWidth;
+        double thomasFermiScale;
+        force.getElectrodeParameters(ie, electrodeParticles, potential, gaussianWidth, thomasFermiScale);
+        for (int i : electrodeParticles) {
+            sysToElec[i] = electrodeParamArray.size();
+            elecToSys.push_back(i);
+            electrodeParamArray.push_back({potential, gaussianWidth, thomasFermiScale});
+        }
+    }
+
+    // Clear (initial guess) charges on electrode particles.
+    numElectrodeParticles = elecToSys.size();
+    for (int ii = 0; ii < numElectrodeParticles; ii++) {
+        charges[elecToSys[ii]] = 0.0;
+    }
+
+    // Set options from force.
+    nonbondedCutoff = force.getCutoffDistance();
+    neighborList = new NeighborList();
+    ConstantPotentialForceImpl::calcPMEParameters(system, force, ewaldAlpha, gridSize[0], gridSize[1], gridSize[2]);
+    exceptionsArePeriodic = force.getExceptionsUsePeriodicBoundaryConditions();
+    cgErrorTol = force.getCGErrorTolerance();
+    useChargeConstraint = force.getUseChargeConstraint();
+    chargeTarget = force.getChargeConstraintTarget();
+    force.getExternalField(externalField);
+
+    // Set the charge target to be that on the electrode particles (so that the
+    // overall charge is constrained correctly if the non-electrolyte particles
+    // are non-neutral).
+    for (int i = 0; i < numParticles; i++) {
+        if (sysToElec[i] == -1) {
+            chargeTarget -= charges[i];
+        }
+    }
+
+    ConstantPotentialForce::ConstantPotentialMethod method = force.getConstantPotentialMethod();
+    if (method == ConstantPotentialForce::Matrix) {
+        solver = new ReferenceConstantPotentialMatrixSolver(numElectrodeParticles);
+    }
+    else if (method == ConstantPotentialForce::CG) {
+        solver = new ReferenceConstantPotentialCGSolver(numElectrodeParticles, force.getUsePreconditioner());
+    }
+    else {
+        throw OpenMMException("internal error: invalid constant potential method");
+    }
+}
+
+double ReferenceCalcConstantPotentialForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
+    Vec3* boxVectors = extractBoxVectors(context);
+    vector<Vec3>& posData = extractPositions(context);
+    vector<Vec3>& forceData = extractForces(context);
+    double energy = 0.0;
+
+    // Solve for charges, then calculate forces and energy.
+    updateNeighborList(boxVectors, posData);
+    ReferenceConstantPotential conp(nonbondedCutoff, neighborList, boxVectors, exceptionsArePeriodic, ewaldAlpha, gridSize, cgErrorTol, useChargeConstraint, chargeTarget, externalField);
+    solver->update(numParticles, numElectrodeParticles, posData, charges, exclusions, sysToElec, elecToSys, electrodeParamArray, conp);
+    conp.execute(numParticles, numElectrodeParticles, posData, forceData, charges, exclusions, sysToElec, elecToSys, electrodeParamArray, includeEnergy ? &energy : NULL, solver);
+
+    // Process non-zeroing exceptions.  Since exceptions and electrodes should
+    // involve disjoint sets of atoms, this isn't required for the energy
+    // minimization with respect to the electrode atom charges.
+    ReferenceBondForce refBondForce;
+    ReferenceConstantPotential14 conp14;
+    if (exceptionsArePeriodic) {
+        conp14.setPeriodic(boxVectors);
+    }
+    refBondForce.calculateForce(num14, bonded14IndexArray, posData, bonded14ParamArray, forceData, includeEnergy ? &energy : NULL, conp14);
+
+    return energy;
+}
+
+void ReferenceCalcConstantPotentialForceKernel::copyParametersToContext(ContextImpl& context, const ConstantPotentialForce& force, int firstParticle, int lastParticle, int firstException, int lastException, int firstElectrode, int lastElectrode) {
+    // Get particle parameters.
+    if (force.getNumParticles() != numParticles) {
+        throw OpenMMException("updateParametersInContext: The number of particles has changed");
+    }
+    for (int i = firstParticle; i <= lastParticle; i++) {
+        // Only update charges on non-electrode particles; keep current guesses
+        // for electrode particles.
+        if (sysToElec[i] == -1) {
+            force.getParticleParameters(i, charges[i]);
+        }
+    }
+
+    // Get "1-4" (non-zeroing) exceptions.
+    vector<int> nb14s;
+    for (int i = 0; i < force.getNumExceptions(); i++) {
+        int particle1, particle2;
+        double chargeProd;
+        force.getExceptionParameters(i, particle1, particle2, chargeProd);
+        if (nb14Index.find(i) == nb14Index.end()) {
+            if (chargeProd != 0.0) {
+                throw OpenMMException("updateParametersInContext: The set of non-excluded exceptions has changed");
+            }
+        }
+        else {
+            nb14s.push_back(i);
+        }
+    }
+    if (nb14s.size() != num14) {
+        throw OpenMMException("updateParametersInContext: The number of non-excluded exceptions has changed");
+    }
+
+    // Get exception parameters.
+    for (int i = 0; i < num14; i++) {
+        int particle1, particle2;
+        force.getExceptionParameters(nb14s[i], particle1, particle2, bonded14ParamArray[i][0]);
+        bonded14IndexArray[i][0] = particle1;
+        bonded14IndexArray[i][1] = particle2;
+    }
+
+    // Get electrode parameters.
+    std::set<int> allElectrodeParticles;
+    for (int ie = 0; ie < force.getNumElectrodes(); ie++) {
+        std::set<int> electrodeParticles;
+        double potential;
+        double gaussianWidth;
+        double thomasFermiScale;
+        force.getElectrodeParameters(ie, electrodeParticles, potential, gaussianWidth, thomasFermiScale);
+        for (int i : electrodeParticles) {
+            int ii = sysToElec[i];
+            if (ii == -1) {
+                // Particle was not an electrode particle but is now.
+                throw OpenMMException("updateParametersInContext: The electrode state of a particle has changed");
+            }
+            electrodeParamArray[ii][0] = potential;
+            electrodeParamArray[ii][1] = gaussianWidth;
+            electrodeParamArray[ii][2] = thomasFermiScale;
+            allElectrodeParticles.insert(i);
+        }
+    }
+    if (allElectrodeParticles.size() != numElectrodeParticles) {
+        // Particle that was an electrode particle might not be now.
+        throw OpenMMException("updateParametersInContext: The electrode state of a particle has changed");
+    }
+
+    // Update external field.
+    force.getExternalField(externalField);
+
+    // Update charge target.
+    chargeTarget = force.getChargeConstraintTarget();
+    for (int i = 0; i < numParticles; i++) {
+        if (sysToElec[i] == -1) {
+            chargeTarget -= charges[i];
+        }
+    }
+
+    // Invalidate matrix or CG data if electrode parameters changed.
+    if (firstElectrode <= lastElectrode) {
+        solver->invalidate();
+    }
+}
+
+void ReferenceCalcConstantPotentialForceKernel::getPMEParameters(double& alpha, int& nx, int& ny, int& nz) const {
+    alpha = ewaldAlpha;
+    nx = gridSize[0];
+    ny = gridSize[1];
+    nz = gridSize[2];
+}
+
+void ReferenceCalcConstantPotentialForceKernel::getCharges(ContextImpl& context, std::vector<double>& chargesOut) {
+    Vec3* boxVectors = extractBoxVectors(context);
+    vector<Vec3>& posData = extractPositions(context);
+    
+    // Solve for charges only.
+    updateNeighborList(boxVectors, posData);
+    ReferenceConstantPotential conp(nonbondedCutoff, neighborList, boxVectors, exceptionsArePeriodic, ewaldAlpha, gridSize, cgErrorTol, useChargeConstraint, chargeTarget, externalField);
+    solver->update(numParticles, numElectrodeParticles, posData, charges, exclusions, sysToElec, elecToSys, electrodeParamArray, conp);
+    conp.getCharges(numParticles, numElectrodeParticles, posData, charges, exclusions, sysToElec, elecToSys, electrodeParamArray, solver);
+
+    chargesOut = charges;
+}
+
+void ReferenceCalcConstantPotentialForceKernel::updateNeighborList(const Vec3* boxVectors, const std::vector<Vec3>& posData) {
+    double minAllowedSize = 1.999999*nonbondedCutoff;
+    if (boxVectors[0][0] < minAllowedSize || boxVectors[1][1] < minAllowedSize || boxVectors[2][2] < minAllowedSize) {
+        throw OpenMMException("The periodic box size has decreased to less than twice the nonbonded cutoff.");
+    }
+    computeNeighborListVoxelHash(*neighborList, numParticles, posData, exclusions, boxVectors, true, nonbondedCutoff, 0.0);
 }
 
 ReferenceCalcCustomNonbondedForceKernel::~ReferenceCalcCustomNonbondedForceKernel() {
@@ -2230,6 +2439,60 @@ void ReferenceCalcGayBerneForceKernel::copyParametersToContext(ContextImpl& cont
     ixn = new ReferenceGayBerneForce(force);
 }
 
+void ReferenceCalcLCPOForceKernel::initialize(const System& system, const LCPOForce& force) {
+    oneBodyEnergy = 0.0;
+    double maxRadius = 0.0;
+
+    double surfaceTension = force.getSurfaceTension();
+    for (int i = 0; i < force.getNumParticles(); i++) {
+        double radius, p1, p2, p3, p4;
+        force.getParticleParameters(i, radius, p1, p2, p3, p4);
+        p1 *= surfaceTension;
+        p2 *= surfaceTension;
+        p3 *= surfaceTension;
+        p4 *= surfaceTension;
+        oneBodyEnergy += 4.0 * PI_M * p1 * radius * radius;
+
+        if (radius != 0.0) {
+            activeParticlesInv.push_back(activeParticles.size());
+            activeParticles.push_back(i);
+            parameters.push_back({radius, p2, p3, p4});
+            maxRadius = max(maxRadius, radius);
+        }
+        else {
+            activeParticlesInv.push_back(-1);
+        }
+    }
+
+    cutoff = 2.0 * maxRadius;
+    usePeriodic = force.usesPeriodicBoundaryConditions();
+}
+
+double ReferenceCalcLCPOForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
+    Vec3* boxVectors = extractBoxVectors(context);
+    vector<Vec3>& posData = extractPositions(context);
+    vector<Vec3>& forceData = extractForces(context);
+
+    if (usePeriodic) {
+        double minAllowedSize = 1.999999 * cutoff;
+        if (boxVectors[0][0] < minAllowedSize || boxVectors[1][1] < minAllowedSize || boxVectors[2][2] < minAllowedSize) {
+            throw OpenMMException("The periodic box size is less than twice the required cutoff for LCPO.");
+        }
+    }
+
+    ReferenceLCPOIxn lcpo(activeParticles, activeParticlesInv, parameters, cutoff, usePeriodic);
+    return oneBodyEnergy + lcpo.execute(boxVectors, posData, forceData, includeForces, includeEnergy);
+}
+
+void ReferenceCalcLCPOForceKernel::copyParametersToContext(ContextImpl& context, const LCPOForce& force) {
+    // For the reference implementation, just reinitialize everything.
+
+    activeParticles.clear();
+    activeParticlesInv.clear();
+    parameters.clear();
+    initialize(context.getSystem(), force);
+}
+
 ReferenceCalcCustomCVForceKernel::~ReferenceCalcCustomCVForceKernel() {
     if (ixn != NULL)
         delete ixn;
@@ -2321,6 +2584,45 @@ double ReferenceCalcRGForceKernel::execute(ContextImpl& context, bool includeFor
     vector<Vec3>& forceData = extractForces(context);
     ReferenceRGForce rg(particles);
     return rg.calculateIxn(posData, forceData);
+}
+
+void ReferenceCalcOrientationRestraintForceKernel::initialize(const System& system, const OrientationRestraintForce& force) {
+    k = force.getK();
+    particles = force.getParticles();
+    if (particles.size() == 0)
+        for (int i = 0; i < system.getNumParticles(); i++)
+            particles.push_back(i);
+    referencePos = force.getReferencePositions();
+    Vec3 center;
+    for (int i : particles)
+        center += referencePos[i];
+    center /= particles.size();
+    for (Vec3& p : referencePos)
+        p -= center;
+}
+
+double ReferenceCalcOrientationRestraintForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
+    vector<Vec3>& posData = extractPositions(context);
+    vector<Vec3>& forceData = extractForces(context);
+    ReferenceOrientationRestraintForce f(k, referencePos, particles);
+    return f.calculateIxn(posData, forceData);
+}
+
+void ReferenceCalcOrientationRestraintForceKernel::copyParametersToContext(ContextImpl& context, const OrientationRestraintForce& force) {
+    if (referencePos.size() != force.getReferencePositions().size())
+        throw OpenMMException("updateParametersInContext: The number of reference positions has changed");
+    k = force.getK();
+    particles = force.getParticles();
+    if (particles.size() == 0)
+        for (int i = 0; i < referencePos.size(); i++)
+            particles.push_back(i);
+    referencePos = force.getReferencePositions();
+    Vec3 center;
+    for (int i : particles)
+        center += referencePos[i];
+    center /= particles.size();
+    for (Vec3& p : referencePos)
+        p -= center;
 }
 
 ReferenceIntegrateVerletStepKernel::~ReferenceIntegrateVerletStepKernel() {
@@ -3234,6 +3536,32 @@ double ReferenceCalcCustomCPPForceKernel::execute(ContextImpl& context, bool inc
     vector<Vec3>& posData = extractPositions(context);
     vector<Vec3>& forceData = extractForces(context);
     double energy = force->computeForce(context, posData, forces);
+    if (includeForces)
+        for (int i = 0; i < forces.size(); i++)
+            forceData[i] += forces[i];
+    return energy;
+}
+
+void ReferenceCalcPythonForceKernel::initialize(const System& system, const PythonForce& force) {
+    computation = &force.getComputation();
+    forces.resize(system.getNumParticles());
+    usePeriodic = force.usesPeriodicBoundaryConditions();
+}
+
+double ReferenceCalcPythonForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
+    vector<Vec3>& posData = extractPositions(context);
+    vector<Vec3>& forceData = extractForces(context);
+    State::StateBuilder builder(context.getTime(), context.getStepCount());
+    builder.setPositions(posData);
+    builder.setParameters(context.getParameters());
+    if (usePeriodic) {
+        Vec3 a, b, c;
+        context.getPeriodicBoxVectors(a, b, c);
+        builder.setPeriodicBoxVectors(a, b, c);
+    }
+    double energy;
+    State state = builder.getState();
+    computation->compute(state, energy, forces.data(), true);
     if (includeForces)
         for (int i = 0; i < forces.size(); i++)
             forceData[i] += forces[i];

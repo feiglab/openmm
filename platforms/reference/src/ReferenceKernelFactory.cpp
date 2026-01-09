@@ -1,12 +1,10 @@
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
- * This is part of the OpenMM molecular simulation toolkit originating from   *
- * Simbios, the NIH National Center for Physics-Based Simulation of           *
- * Biological Structures at Stanford, funded under the NIH Roadmap for        *
- * Medical Research, grant U54 GM072970. See https://simtk.org.               *
+ * This is part of the OpenMM molecular simulation toolkit.                   *
+ * See https://openmm.org/development.                                        *
  *                                                                            *
- * Portions copyright (c) 2008-2024 Stanford University and the Authors.      *
+ * Portions copyright (c) 2008-2025 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
  * Contributors:                                                              *
  *                                                                            *
@@ -48,6 +46,8 @@ KernelImpl* ReferenceKernelFactory::createKernelImpl(std::string name, const Pla
         return new ReferenceVirtualSitesKernel(name, platform);
     if (name == CalcNonbondedForceKernel::Name())
         return new ReferenceCalcNonbondedForceKernel(name, platform);
+    if (name == CalcConstantPotentialForceKernel::Name())
+        return new ReferenceCalcConstantPotentialForceKernel(name, platform);
     if (name == CalcCustomNonbondedForceKernel::Name())
         return new ReferenceCalcCustomNonbondedForceKernel(name, platform);
     if (name == CalcHarmonicBondForceKernel::Name())
@@ -84,6 +84,10 @@ KernelImpl* ReferenceKernelFactory::createKernelImpl(std::string name, const Pla
         return new ReferenceCalcATMForceKernel(name, platform);
     if (name == CalcCustomCPPForceKernel::Name())
         return new ReferenceCalcCustomCPPForceKernel(name, platform);
+    if (name == CalcOrientationRestraintForceKernel::Name())
+        return new ReferenceCalcOrientationRestraintForceKernel(name, platform);
+    if (name == CalcPythonForceKernel::Name())
+        return new ReferenceCalcPythonForceKernel(name, platform);
     if (name == CalcRGForceKernel::Name())
         return new ReferenceCalcRGForceKernel(name, platform);
     if (name == CalcRMSDForceKernel::Name())
@@ -92,6 +96,8 @@ KernelImpl* ReferenceKernelFactory::createKernelImpl(std::string name, const Pla
         return new ReferenceCalcCustomManyParticleForceKernel(name, platform);
     if (name == CalcGayBerneForceKernel::Name())
         return new ReferenceCalcGayBerneForceKernel(name, platform);
+    if (name == CalcLCPOForceKernel::Name())
+        return new ReferenceCalcLCPOForceKernel(name, platform);
     if (name == IntegrateVerletStepKernel::Name())
         return new ReferenceIntegrateVerletStepKernel(name, platform, data);
     if (name == IntegrateNoseHooverStepKernel::Name())

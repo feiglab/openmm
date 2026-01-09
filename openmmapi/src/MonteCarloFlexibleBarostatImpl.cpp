@@ -1,10 +1,8 @@
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
- * This is part of the OpenMM molecular simulation toolkit originating from   *
- * Simbios, the NIH National Center for Physics-Based Simulation of           *
- * Biological Structures at Stanford, funded under the NIH Roadmap for        *
- * Medical Research, grant U54 GM072970. See https://simtk.org.               *
+ * This is part of the OpenMM molecular simulation toolkit.                   *
+ * See https://openmm.org/development.                                        *
  *                                                                            *
  * Portions copyright (c) 2010-2025 Stanford University and the Authors.      *
  * Authors: Peter Eastman, Sander Vandenhaute                                 *
@@ -140,16 +138,12 @@ void MonteCarloFlexibleBarostatImpl::updateContextState(ContextImpl& context, bo
 }
 
 map<string, double> MonteCarloFlexibleBarostatImpl::getDefaultParameters() {
-    map<string, double> parameters;
-    parameters[MonteCarloFlexibleBarostat::Pressure()] = getOwner().getDefaultPressure();
-    parameters[MonteCarloFlexibleBarostat::Temperature()] = getOwner().getDefaultTemperature();
-    return parameters;
+    return {{MonteCarloFlexibleBarostat::Pressure(), getOwner().getDefaultPressure()},
+            {MonteCarloFlexibleBarostat::Temperature(), getOwner().getDefaultTemperature()}};
 }
 
 vector<string> MonteCarloFlexibleBarostatImpl::getKernelNames() {
-    vector<string> names;
-    names.push_back(ApplyMonteCarloBarostatKernel::Name());
-    return names;
+    return {ApplyMonteCarloBarostatKernel::Name()};
 }
 
 void MonteCarloFlexibleBarostatImpl::computeCurrentPressure(ContextImpl& context, vector<double>& pressure) {

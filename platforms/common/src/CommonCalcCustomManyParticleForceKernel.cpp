@@ -1,10 +1,8 @@
 /* -------------------------------------------------------------------------- *
  *                                   OpenMM                                   *
  * -------------------------------------------------------------------------- *
- * This is part of the OpenMM molecular simulation toolkit originating from   *
- * Simbios, the NIH National Center for Physics-Based Simulation of           *
- * Biological Structures at Stanford, funded under the NIH Roadmap for        *
- * Medical Research, grant U54 GM072970. See https://simtk.org.               *
+ * This is part of the OpenMM molecular simulation toolkit.                   *
+ * See https://openmm.org/development.                                        *
  *                                                                            *
  * Portions copyright (c) 2008-2025 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
@@ -355,7 +353,11 @@ void CommonCalcCustomManyParticleForceKernel::initialize(const System& system, c
     replacements["COMPUTE_INTERACTION"] = compute.str();
     replacements["NUM_CANDIDATE_COMBINATIONS"] = numCombinations.str();
     replacements["FIND_ATOMS_FOR_COMBINATION_INDEX"] = atomsForCombination.str();
-    replacements["IS_VALID_COMBINATION"] = isValidCombination.str();
+    string isValidCombinationStr = isValidCombination.str();
+    if (isValidCombinationStr.empty()) {
+        isValidCombinationStr = "true";
+    }
+    replacements["IS_VALID_COMBINATION"] = isValidCombinationStr;
     replacements["VERIFY_CUTOFF"] = verifyCutoff.str();
     replacements["VERIFY_EXCLUSIONS"] = verifyExclusions.str();
     replacements["PERMUTE_ATOMS"] = permute.str();
